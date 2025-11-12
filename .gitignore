@@ -1,13 +1,106 @@
-__pycache__
-.vscode
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
 
-all excels
-all resumes
-logs
+# C extensions
+*.so
 
-old
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-secrets.py
-config/personals.py
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 .venv
+myvenv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Project-specific
+all excels/
+all resumes/
+logs/
+old/
+
+# Sensitive configuration files
+secrets.py
+config/personal_config.json
 apikeys.py
+
+# Resume extraction output (may contain sensitive data)
+resume_extraction/*.json
+resume_extraction/*.txt
+resume_extraction/resume_data.json
+resume_extraction/resume_extracted.txt
+resume_extraction/resume_info.json
+
+# Logs
+*.log
+logs/**/*.png
+logs/**/*.jpg
+logs/**/*.jpeg

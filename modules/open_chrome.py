@@ -47,7 +47,14 @@ try:
         #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__)) 
             print_lg("Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!")
             driver = uc.Chrome(options=options)
-    else: driver = webdriver.Chrome(options=options) #, service=Service(executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe"))
+    else: 
+        # Try to use chromium-browser if available (for Linux/WSL)
+        import shutil
+        chromium_path = shutil.which('chromium-browser') or shutil.which('chromium')
+        if chromium_path:
+            options.binary_location = chromium_path
+            print_lg(f"Using Chromium browser at: {chromium_path}")
+        driver = webdriver.Chrome(options=options) #, service=Service(executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe"))
     driver.maximize_window()
     wait = WebDriverWait(driver, 5)
     actions = ActionChains(driver)

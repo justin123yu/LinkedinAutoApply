@@ -12,43 +12,56 @@ GitHub:     https://github.com/GodsScion/Auto_job_applier_linkedIn
 version:    2024.11.28.16.00
 '''
 
+import os
+import json
 
 ###################################################### CONFIGURE YOUR TOOLS HERE ######################################################
 
+# Load personal information from JSON file if it exists, otherwise use defaults
+_personal_config_path = os.path.join(os.path.dirname(__file__), 'personal_config.json')
+_personal_data = {}
+
+if os.path.exists(_personal_config_path):
+    try:
+        with open(_personal_config_path, 'r', encoding='utf-8') as f:
+            _personal_data = json.load(f)
+    except Exception as e:
+        print(f"Warning: Failed to load personal_config.json: {e}")
+        print("Using default values. Please copy personal_config.json.example to personal_config.json and fill in your information.")
 
 # >>>>>>>>>>> Easy Apply Questions & Inputs <<<<<<<<<<<
 
 # Your legal name
-first_name = "Sai"                 # Your first name in quotes Eg: "First", "Sai"
-middle_name = "Vignesh"            # Your name in quotes Eg: "Middle", "Vignesh", ""
-last_name = "Golla"                # Your last name in quotes Eg: "Last", "Golla"
+first_name = _personal_data.get('personal_info', {}).get('first_name', "")
+middle_name = _personal_data.get('personal_info', {}).get('middle_name', "")
+last_name = _personal_data.get('personal_info', {}).get('last_name', "")
 
 # Phone number (required), make sure it's valid.
-phone_number = "9876543210"        # Enter your 10 digit number in quotes Eg: "9876543210"
+phone_number = _personal_data.get('personal_info', {}).get('phone_number', "")
 
 # What is your current city?
-current_city = ""                  # Los Angeles, San Francisco, etc.
+current_city = _personal_data.get('personal_info', {}).get('current_city', "")
 '''
 Note: If left empty as "", the bot will fill in location of jobs location.
 '''
 
 # Address, not so common question but some job applications make it required!
-street = "123 Main Street"
-state = "STATE"
-zipcode = "12345"
-country = "Will Let You Know When Established"
+street = _personal_data.get('personal_info', {}).get('street', "")
+state = _personal_data.get('personal_info', {}).get('state', "")
+zipcode = _personal_data.get('personal_info', {}).get('zipcode', "")
+country = _personal_data.get('personal_info', {}).get('country', "")
 
 ## US Equal Opportunity questions
 # What is your ethnicity or race? If left empty as "", tool will not answer the question. However, note that some companies make it compulsory to be answered
-ethnicity = "Decline"              # "Decline", "Hispanic/Latino", "American Indian or Alaska Native", "Asian", "Black or African American", "Native Hawaiian or Other Pacific Islander", "White", "Other"
+ethnicity = _personal_data.get('demographic_info', {}).get('ethnicity', "")  # "Decline", "Hispanic/Latino", "American Indian or Alaska Native", "Asian", "Black or African American", "Native Hawaiian or Other Pacific Islander", "White", "Other"
 
 # How do you identify yourself? If left empty as "", tool will not answer the question. However, note that some companies make compulsory to be answered
-gender = "Decline"                 # "Male", "Female", "Other", "Decline" or ""
+gender = _personal_data.get('demographic_info', {}).get('gender', "")  # "Male", "Female", "Other", "Decline" or ""
 
 # Are you physically disabled or have a history/record of having a disability? If left empty as "", tool will not answer the question. However, note that some companies make it compulsory to be answered
-disability_status = "Decline"      # "Yes", "No", "Decline"
+disability_status = _personal_data.get('demographic_info', {}).get('disability_status', "")  # "Yes", "No", "Decline"
 
-veteran_status = "Decline"         # "Yes", "No", "Decline"
+veteran_status = _personal_data.get('demographic_info', {}).get('veteran_status', "")  # "Yes", "No", "Decline"
 ##
 
 

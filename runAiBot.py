@@ -12,12 +12,64 @@ GitHub:     https://github.com/GodsScion/Auto_job_applier_linkedIn
 version:    24.12.29.12.30
 '''
 
+# Fix Tcl/Tk library paths for Windows (only if not already set in environment)
+import os
+from dotenv import load_dotenv
+
+# Check if already set in system environment (before loading .env)
+tcl_already_set = 'TCL_LIBRARY' in os.environ
+tk_already_set = 'TK_LIBRARY' in os.environ
+
+# Load environment variables from .env file early (before other imports that might use Tkinter)
+# load_dotenv() will not override existing system environment variables
+load_dotenv()
+
+# Set TCL_LIBRARY and TK_LIBRARY from .env file if not already set in system environment
+# Verify paths exist before setting
+if not tcl_already_set:
+    tcl_path = os.getenv('TCL_LIBRARY')
+    if tcl_path and os.path.exists(tcl_path):
+        os.environ['TCL_LIBRARY'] = tcl_path
+
+if not tk_already_set:
+    tk_path = os.getenv('TK_LIBRARY')
+    if tk_path and os.path.exists(tk_path):
+        os.environ['TK_LIBRARY'] = tk_path
+
+# Debug mode flag from environment variable
+# Set DEBUG_MODE=False in .env to skip all confirmation dialogs for automated runs
+DEBUG_MODE_STR = os.getenv('DEBUG_MODE', 'True').lower()
+DEBUG_MODE = DEBUG_MODE_STR == 'true'
 
 # Imports
-import os
 import csv
 import re
 import pyautogui
+
+# Helper function for debug mode confirmation dialogs
+def debug_confirm(text: str, title: str, buttons: list[str], default_button: str | None = None) -> str:
+    '''
+    Wrapper for pyautogui.confirm that respects DEBUG_MODE flag.
+    When DEBUG_MODE=False, automatically returns the default_button or last button without showing dialog.
+    When DEBUG_MODE=True, shows the confirmation dialog as normal.
+    
+    Args:
+        text: Message to display
+        title: Dialog title
+        buttons: List of button labels
+        default_button: Button to return when DEBUG_MODE=False (defaults to last button if None)
+    
+    Returns:
+        Selected button label
+    '''
+    if not DEBUG_MODE:
+        # Return default button or last button (usually "Proceed", "Next", "Submit", etc.)
+        if default_button and default_button in buttons:
+            return default_button
+        # Default to last button (usually the "proceed" option)
+        return buttons[-1] if buttons else "OK"
+    # Show dialog normally when DEBUG_MODE is True
+    return pyautogui.confirm(text, title, buttons)
 
 # Set CSV field size limit to prevent field size errors
 csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
@@ -242,7 +294,7 @@ def apply_filters() -> None:
         show_results_button.click()
 
         global pause_after_filters
-        if pause_after_filters and "Turn off Pause after search" == pyautogui.confirm("These are your configured search results and filter. It is safe to change them while this dialog is open, any changes later could result in errors and skipping this search run.", "Please check your results", ["Turn off Pause after search", "Look's good, Continue"]):
+        if pause_after_filters and "Turn off Pause after search" == debug_confirm("These are your configured search results and filter. It is safe to change them while this dialog is open, any changes later could result in errors and skipping this search run.", "Please check your results", ["Turn off Pause after search", "Look's good, Continue"]):
             pause_after_filters = False
 
     except Exception as e:
@@ -862,6 +914,17 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
     if randomize_search_order:  shuffle(search_terms)
     for searchTerm in search_terms:
+        # Wait for user confirmation before starting new search term
+        confirmation = debug_confirm(
+            f'Ready to search for: "{searchTerm}"\n\nProceed with this search?',
+            "Confirm Search Term",
+            ["Skip", "Proceed"],
+            default_button="Proceed"
+        )
+        if confirmation == "Skip":
+            print_lg(f'Skipping search term "{searchTerm}" as requested by user.')
+            continue
+        
         driver.get(f"https://www.linkedin.com/jobs/search/?keywords={searchTerm}")
         print_lg("\n________________________________________________________________________________________________________________________\n")
         print_lg(f'\n>>>> Now searching for "{searchTerm}" <<<<\n\n')
@@ -896,6 +959,17 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             continue
                     except Exception as e:
                         print_lg(f'Trying to Apply to "{title} | {company}" job. Job ID: {job_id}')
+                    
+                    # Wait for user confirmation before proceeding with this job
+                    confirmation = debug_confirm(
+                        f'Job Details:\n\nTitle: {title}\nCompany: {company}\nLocation: {work_location}\nWork Style: {work_style}\n\nProceed with this job application?',
+                        "Confirm Job Application",
+                        ["Skip Job", "Proceed"],
+                        default_button="Proceed"
+                    )
+                    if confirmation == "Skip Job":
+                        print_lg(f'Skipping "{title} | {company}" job as requested by user.')
+                        continue
 
                     job_link = "https://www.linkedin.com/jobs/view/"+job_id
                     application_link = "Easy Applied"
@@ -992,6 +1066,17 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     uploaded = False
                     # Case 1: Easy Apply Button
                     if try_xp(driver, ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]"):
+                        # Wait for user confirmation before starting Easy Apply
+                        confirmation = debug_confirm(
+                            f'Ready to start Easy Apply for:\n\nTitle: {title}\nCompany: {company}\n\nProceed with Easy Apply?',
+                            "Confirm Easy Apply",
+                            ["Cancel", "Proceed"],
+                            default_button="Proceed"
+                        )
+                        if confirmation == "Cancel":
+                            print_lg(f'Cancelled Easy Apply for "{title} | {company}" job as requested by user.')
+                            discard_job()
+                            continue
                         try: 
                             try:
                                 errored = ""
@@ -1017,8 +1102,26 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                         raise Exception("Seems like stuck in a continuous loop of next, probably because of new questions.")
                                     questions_list = answer_questions(modal, questions_list, work_location, job_description=description)
                                     if useNewResume and not uploaded: uploaded, resume = upload_resume(modal, default_resume_path)
-                                    try: next_button = modal.find_element(By.XPATH, './/span[normalize-space(.)="Review"]') 
-                                    except NoSuchElementException:  next_button = modal.find_element(By.XPATH, './/button[contains(span, "Next")]')
+                                    try: 
+                                        next_button = modal.find_element(By.XPATH, './/span[normalize-space(.)="Review"]')
+                                        is_review = True
+                                    except NoSuchElementException:  
+                                        next_button = modal.find_element(By.XPATH, './/button[contains(span, "Next")]')
+                                        is_review = False
+                                    
+                                    # Wait for user confirmation before clicking Next (but not for Review button)
+                                    if not is_review:
+                                        confirmation = debug_confirm(
+                                            f'Ready to proceed to next step in Easy Apply.\n\nJob: {title} | {company}\nStep: {next_counter}\n\nClick Next?',
+                                            "Confirm Next Step",
+                                            ["Cancel", "Next"],
+                                            default_button="Next"
+                                        )
+                                        if confirmation == "Cancel":
+                                            print_lg(f'Cancelled Easy Apply for "{title} | {company}" job as requested by user.')
+                                            discard_job()
+                                            raise Exception("Job application cancelled by user!")
+                                    
                                     try: next_button.click()
                                     except ElementClickInterceptedException: break    # Happens when it tries to click Next button in About Company photos section
                                     buffer(click_gap)
@@ -1031,15 +1134,29 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                 wait_span_click(driver, "Review", 1, scrollTop=True)
                                 cur_pause_before_submit = pause_before_submit
                                 if errored != "stuck" and cur_pause_before_submit:
-                                    decision = pyautogui.confirm('1. Please verify your information.\n2. If you edited something, please return to this final screen.\n3. DO NOT CLICK "Submit Application".\n\n\n\n\nYou can turn off "Pause before submit" setting in config.py\nTo TEMPORARILY disable pausing, click "Disable Pause"', "Confirm your information",["Disable Pause", "Discard Application", "Submit Application"])
+                                    decision = debug_confirm('1. Please verify your information.\n2. If you edited something, please return to this final screen.\n3. DO NOT CLICK "Submit Application".\n\n\n\n\nYou can turn off "Pause before submit" setting in config.py\nTo TEMPORARILY disable pausing, click "Disable Pause"', "Confirm your information",["Disable Pause", "Discard Application", "Submit Application"], default_button="Submit Application")
                                     if decision == "Discard Application": raise Exception("Job application discarded by user!")
                                     pause_before_submit = False if "Disable Pause" == decision else True
                                     # try_xp(modal, ".//span[normalize-space(.)='Review']")
                                 follow_company(modal)
+                                
+                                # Wait for user confirmation before submitting application (only if pause_before_submit is False)
+                                if errored != "stuck" and not cur_pause_before_submit:
+                                    confirmation = debug_confirm(
+                                        f'Ready to submit application for:\n\nTitle: {title}\nCompany: {company}\n\nSubmit application?',
+                                        "Confirm Submit Application",
+                                        ["Cancel", "Submit"],
+                                        default_button="Submit"
+                                    )
+                                    if confirmation == "Cancel":
+                                        print_lg(f'Cancelled submission for "{title} | {company}" job as requested by user.')
+                                        discard_job()
+                                        raise Exception("Job application submission cancelled by user!")
+                                
                                 if wait_span_click(driver, "Submit application", 2, scrollTop=True): 
                                     date_applied = datetime.now()
                                     if not wait_span_click(driver, "Done", 2): actions.send_keys(Keys.ESCAPE).perform()
-                                elif errored != "stuck" and cur_pause_before_submit and "Yes" in pyautogui.confirm("You submitted the application, didn't you 😒?", "Failed to find Submit Application!", ["Yes", "No"]):
+                                elif errored != "stuck" and cur_pause_before_submit and "Yes" in debug_confirm("You submitted the application, didn't you 😒?", "Failed to find Submit Application!", ["Yes", "No"], default_button="Yes"):
                                     date_applied = datetime.now()
                                     wait_span_click(driver, "Done", 2)
                                 else:
@@ -1059,6 +1176,16 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             continue
                     else:
                         # Case 2: Apply externally
+                        # Wait for user confirmation before external apply
+                        confirmation = debug_confirm(
+                            f'This job requires external application:\n\nTitle: {title}\nCompany: {company}\n\nOpen external application link?',
+                            "Confirm External Apply",
+                            ["Skip", "Open Link"],
+                            default_button="Open Link"
+                        )
+                        if confirmation == "Skip":
+                            print_lg(f'Skipping external application for "{title} | {company}" job as requested by user.')
+                            continue
                         skip, application_link, tabs_count = external_apply(pagination_element, job_id, job_link, resume, date_listed, application_link, screenshot_name)
                         if dailyEasyApplyLimitReached:
                             print_lg("\n###############  Daily application limit for Easy Apply is reached!  ###############\n")
@@ -1073,6 +1200,17 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     if application_link == "Easy Applied": easy_applied_count += 1
                     else:   external_jobs_count += 1
                     applied_jobs.add(job_id)
+                    
+                    # Wait for user confirmation before moving to next job
+                    confirmation = debug_confirm(
+                        f'Application completed for:\n\nTitle: {title}\nCompany: {company}\n\nProceed to next job?',
+                        "Continue to Next Job",
+                        ["Stop", "Next Job"],
+                        default_button="Next Job"
+                    )
+                    if confirmation == "Stop":
+                        print_lg("Stopping job application process as requested by user.")
+                        return
 
 
 
@@ -1080,6 +1218,18 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                 if pagination_element == None:
                     print_lg("Couldn't find pagination element, probably at the end page of results!")
                     break
+                
+                # Wait for user confirmation before moving to next page
+                confirmation = debug_confirm(
+                    f'Finished processing jobs on page {current_page}.\n\nProceed to page {current_page+1}?',
+                    "Continue to Next Page",
+                    ["Stop", "Next Page"],
+                    default_button="Next Page"
+                )
+                if confirmation == "Stop":
+                    print_lg("Stopping job application process as requested by user.")
+                    return
+                
                 try:
                     pagination_element.find_element(By.XPATH, f"//button[@aria-label='Page {current_page+1}']").click()
                     print_lg(f"\n>-> Now on Page {current_page+1} \n")

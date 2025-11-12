@@ -1,0 +1,36 @@
+{
+  "personal_info": {
+    "first_name": "YourFirstName",
+    "middle_name": "",
+    "last_name": "YourLastName",
+    "phone_number": "1234567890",
+    "current_city": "Your City",
+    "street": "123 Main Street",
+    "state": "CA",
+    "zipcode": "12345",
+    "country": "United States"
+  },
+  "demographic_info": {
+    "ethnicity": "Decline",
+    "gender": "Decline",
+    "disability_status": "Decline",
+    "veteran_status": "Decline"
+  },
+  "application_info": {
+    "years_of_experience": "5",
+    "require_visa": "No",
+    "website": "https://github.com/yourusername",
+    "linkedIn": "https://www.linkedin.com/in/yourprofile/",
+    "us_citizenship": "U.S. Citizen/Permanent Resident",
+    "desired_salary": 80000,
+    "current_ctc": 800000,
+    "notice_period": 30,
+    "linkedin_headline": "Your Professional Headline",
+    "linkedin_summary": "Your professional summary here. Use \\n for line breaks.",
+    "cover_letter": "Your cover letter here. Use \\n for line breaks.",
+    "user_information_all": "Your user information for AI. Use \\n for line breaks.",
+    "recent_employer": "Your Recent Employer",
+    "confidence_level": "8"
+  }
+}
+
