@@ -49,10 +49,10 @@ CHECK THE OPENAI API PIRCES AT THEIR WEBSITE (https://openai.com/api/pricing/).
 ai_provider = os.getenv("AI_PROVIDER", "openai")               # "openai", "deepseek", "gemini"
 '''
 Note: Select your AI provider.
-* "openai" - OpenAI API (GPT models) OR OpenAi-compatible APIs (like Ollama)
+* "openai" - OpenAI API (GPT models) OR OpenAI-compatible APIs (like GPT-OSS, Ollama, LM Studio, etc.)
 * "deepseek" - DeepSeek API (DeepSeek models)
 * "gemini" - Google Gemini API (Gemini models)
-* For any other models, keep it as "openai" if it is compatible with OpenAI's api.
+* For any other OpenAI-compatible models (like GPT-OSS), keep it as "openai" and set the appropriate base_url.
 '''
 
 
@@ -60,7 +60,10 @@ Note: Select your AI provider.
 # Your LLM url or other AI api url and port
 llm_api_url = os.getenv("LLM_API_URL")       # Examples: "https://api.openai.com/v1/", "http://127.0.0.1:1234/v1/", "http://localhost:1234/v1/", "https://api.deepseek.com", "https://api.deepseek.com/v1"
 '''
-Note: Don't forget to add / at the end of your url. You may not need this if you are using Gemini.
+Note: 
+- For OpenAI API: Use "https://api.openai.com/v1/"
+- For OpenAI-compatible APIs (GPT-OSS, Ollama, LM Studio, etc.): Use your local/remote API endpoint (e.g., "http://127.0.0.1:1234/v1/")
+- Don't forget to add / at the end of your url. You may not need this if you are using Gemini.
 '''
 
 # Your LLM API key or other AI API key 

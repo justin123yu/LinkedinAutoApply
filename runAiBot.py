@@ -1279,6 +1279,21 @@ def main() -> None:
         total_runs = 1        
         validate_config()
         
+        # Check and display LLM tool usage status from environment variables
+        if use_AI:
+            from modules.validator import check_llm_env_vars
+            llm_status = check_llm_env_vars()
+            if llm_status:
+                print_lg("\n" + "="*80)
+                print_lg("LLM Tool Usage Status (from environment variables):")
+                print_lg(f"  Enabled: {llm_status['enabled']}")
+                print_lg(f"  Provider: {llm_status['provider']}")
+                print_lg(f"  API URL: {llm_status['api_url']}")
+                print_lg(f"  Model: {llm_status['model']}")
+                print_lg(f"  API Key Set: {llm_status['api_key_set']}")
+                print_lg(f"  Stream Output: {llm_status['stream_output']}")
+                print_lg("="*80 + "\n")
+        
         if not os.path.exists(default_resume_path):
             pyautogui.alert(text='Your default resume "{}" is missing! Please update it\'s folder path "default_resume_path" in config.py\n\nOR\n\nAdd a resume with exact name and path (check for spelling mistakes including cases).\n\n\nFor now the bot will continue using your previous upload from LinkedIn!'.format(default_resume_path), title="Missing Resume", button="OK")
             useNewResume = False

@@ -149,9 +149,78 @@ def validate_search() -> None | ValueError | TypeError:
 
 
 from config.secrets import *
+import os
+
+def check_llm_env_vars() -> dict | None:
+    '''
+    Checks if required LLM environment variables are set when use_AI is True.
+    Returns a dict with status information, or None if AI is disabled.
+    Raises ValueError if required vars are missing when AI is enabled.
+    '''
+    if not use_AI:
+        return None  # Skip LLM validation if AI is not enabled
+    
+    # Check required environment variables for LLM usage
+    env_vars = {
+        "USE_AI": os.getenv("USE_AI", "False"),
+        "AI_PROVIDER": os.getenv("AI_PROVIDER", "openai"),
+        "LLM_API_URL": os.getenv("LLM_API_URL"),
+        "LLM_MODEL": os.getenv("LLM_MODEL"),
+        "LLM_API_KEY": os.getenv("LLM_API_KEY", "not-needed"),
+        "LLM_SPEC": os.getenv("LLM_SPEC", "openai"),
+        "STREAM_OUTPUT": os.getenv("STREAM_OUTPUT", "False"),
+    }
+    
+    # Check which variables are set
+    missing_vars = []
+    for var_name, var_value in env_vars.items():
+        if var_name in ["LLM_API_URL", "LLM_MODEL"]:
+            if not var_value or (isinstance(var_value, str) and var_value.strip() == ""):
+                missing_vars.append(var_name)
+    
+    if missing_vars:
+        raise ValueError(
+            f'LLM tool is enabled (USE_AI=True) but required environment variables are missing: {", ".join(missing_vars)}\n\n'
+            f'Please set these in your .env file or as environment variables:\n'
+            f'  - LLM_API_URL: Your AI API endpoint URL\n'
+            f'  - LLM_MODEL: Your AI model name\n'
+            f'  - LLM_API_KEY: Your API key (or "not-needed" for local LLMs like Ollama)\n'
+            f'  - AI_PROVIDER: "openai", "deepseek", or "gemini"\n\n'
+            f'Example for OpenAI:\n'
+            f'  USE_AI=True\n'
+            f'  LLM_API_URL=https://api.openai.com/v1/\n'
+            f'  LLM_MODEL=gpt-3.5-turbo\n'
+            f'  LLM_API_KEY=sk-your-key-here\n'
+            f'  AI_PROVIDER=openai\n\n'
+            f'Example for GPT-OSS (OpenAI-compatible):\n'
+            f'  USE_AI=True\n'
+            f'  LLM_API_URL=http://127.0.0.1:1234/v1/\n'
+            f'  LLM_MODEL=your-model-name\n'
+            f'  LLM_API_KEY=not-needed\n'
+            f'  AI_PROVIDER=openai'
+        )
+    
+    # Validate AI_PROVIDER if set
+    ai_provider_env = env_vars.get("AI_PROVIDER", "").lower()
+    if ai_provider_env and ai_provider_env not in ["openai", "deepseek", "gemini"]:
+        raise ValueError(
+            f'Invalid AI_PROVIDER value: "{ai_provider_env}". Must be one of: "openai", "deepseek", "gemini"'
+        )
+    
+    # Return status information
+    return {
+        "enabled": True,
+        "provider": ai_provider_env,
+        "api_url": env_vars.get("LLM_API_URL", "Not set"),
+        "model": env_vars.get("LLM_MODEL", "Not set"),
+        "api_key_set": bool(env_vars.get("LLM_API_KEY") and env_vars.get("LLM_API_KEY") != "not-needed"),
+        "stream_output": env_vars.get("STREAM_OUTPUT", "False").lower() == "true",
+    }
+
 def validate_secrets() -> None | ValueError | TypeError:
     '''
     Validates all variables in the `/config/secrets.py` file.
+    Also checks environment variables for LLM tool usage.
     '''
     global __validation_file_path
     __validation_file_path = "config/secrets.py"
@@ -160,19 +229,28 @@ def validate_secrets() -> None | ValueError | TypeError:
     check_string(password, "password", min_length=5)
 
     check_boolean(use_AI, "use_AI")
+    
+    # Check LLM environment variables if AI is enabled
+    if use_AI:
+        check_llm_env_vars()
+    
     check_string(llm_api_url, "llm_api_url", min_length=5)
     check_string(llm_api_key, "llm_api_key")
     # check_string(llm_embedding_model, "llm_embedding_model")
     check_boolean(stream_output, "stream_output")
     
     ##> ------ Yang Li : MARKYangL - Feature ------
-    # Validate DeepSeek configuration
-    check_string(ai_provider, "ai_provider", ["openai", "deepseek"])
+    # Validate AI provider configuration
+    check_string(ai_provider, "ai_provider", ["openai", "deepseek", "gemini"])
 
     ##> ------ Tim L : tulxoro - Refactor ------
     if ai_provider == "deepseek":
         check_string(llm_model, "deepseek_model", ["deepseek-chat", "deepseek-reasoner"])
+    elif ai_provider == "gemini":
+        # Gemini models are validated in gemini_create_client()
+        check_string(llm_model, "llm_model")
     else:
+        # OpenAI or OpenAI-compatible (like GPT-OSS, Ollama, etc.)
         check_string(llm_model, "llm_model")
     ##<
 
