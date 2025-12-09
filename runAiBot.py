@@ -12,77 +12,39 @@ GitHub:     https://github.com/GodsScion/Auto_job_applier_linkedIn
 version:    24.12.29.12.30
 '''
 
-# Fix Tcl/Tk library paths for Windows (only if not already set in environment)
+# Load environment variables from .env file
 import os
 from dotenv import load_dotenv
-
-# Check if already set in system environment (before loading .env)
-tcl_already_set = 'TCL_LIBRARY' in os.environ
-tk_already_set = 'TK_LIBRARY' in os.environ
-
-# Load environment variables from .env file early (before other imports that might use Tkinter)
-# load_dotenv() will not override existing system environment variables
 load_dotenv()
-
-# Set TCL_LIBRARY and TK_LIBRARY from .env file if not already set in system environment
-# Verify paths exist before setting
-if not tcl_already_set:
-    tcl_path = os.getenv('TCL_LIBRARY')
-    if tcl_path and os.path.exists(tcl_path):
-        os.environ['TCL_LIBRARY'] = tcl_path
-
-if not tk_already_set:
-    tk_path = os.getenv('TK_LIBRARY')
-    if tk_path and os.path.exists(tk_path):
-        os.environ['TK_LIBRARY'] = tk_path
 
 # Debug mode flag from environment variable
 # Set DEBUG_MODE=False in .env to skip all confirmation dialogs for automated runs
 DEBUG_MODE_STR = os.getenv('DEBUG_MODE', 'True').lower()
 DEBUG_MODE = DEBUG_MODE_STR == 'true'
 
-# Imports
+# Standard library imports
 import csv
 import re
-import pyautogui
-
-# Helper function for debug mode confirmation dialogs
-def debug_confirm(text: str, title: str, buttons: list[str], default_button: str | None = None) -> str:
-    '''
-    Wrapper for pyautogui.confirm that respects DEBUG_MODE flag.
-    When DEBUG_MODE=False, automatically returns the default_button or last button without showing dialog.
-    When DEBUG_MODE=True, shows the confirmation dialog as normal.
-    
-    Args:
-        text: Message to display
-        title: Dialog title
-        buttons: List of button labels
-        default_button: Button to return when DEBUG_MODE=False (defaults to last button if None)
-    
-    Returns:
-        Selected button label
-    '''
-    if not DEBUG_MODE:
-        # Return default button or last button (usually "Proceed", "Next", "Submit", etc.)
-        if default_button and default_button in buttons:
-            return default_button
-        # Default to last button (usually the "proceed" option)
-        return buttons[-1] if buttons else "OK"
-    # Show dialog normally when DEBUG_MODE is True
-    return pyautogui.confirm(text, title, buttons)
+from datetime import datetime
+from random import choice, shuffle, randint
+from typing import Literal, Optional, Union, List, Tuple
 
 # Set CSV field size limit to prevent field size errors
 csv.field_size_limit(1000000)  # Set to 1MB instead of default 131KB
 
-from random import choice, shuffle, randint
-from datetime import datetime
-
+# Selenium imports
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, NoSuchWindowException, ElementNotInteractableException, WebDriverException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    ElementClickInterceptedException,
+    NoSuchWindowException,
+    ElementNotInteractableException,
+    WebDriverException
+)
 
 from config.personals import *
 from config.questions import *
@@ -98,11 +60,26 @@ from modules.ai.openaiConnections import ai_create_openai_client, ai_extract_ski
 from modules.ai.deepseekConnections import deepseek_create_client, deepseek_extract_skills, deepseek_answer_question
 from modules.ai.geminiConnections import gemini_create_client, gemini_extract_skills, gemini_answer_question
 
-from typing import Literal
+# Cross-platform confirm function is imported from modules.helpers
+# Helper function for debug mode confirmation dialogs (only used during application process)
+def debug_confirm(text: str, title: str, buttons: List[str], default_button: Optional[str] = None) -> str:
+    '''
+    Wrapper for cross-platform confirm that respects DEBUG_MODE flag.
+    When DEBUG_MODE=False, automatically returns the default_button or last button without showing dialog.
+    When DEBUG_MODE=True, shows the confirmation dialog as normal.
+    
+    Args:
+        text: Message to display
+        title: Dialog title
+        buttons: List of button labels
+        default_button: Button to return when DEBUG_MODE=False (defaults to last button if None)
+    
+    Returns:
+        Selected button label
+    '''
+    # Pass DEBUG_MODE to cross_platform_confirm
+    return cross_platform_confirm(text, title, buttons, default_button, debug_mode=DEBUG_MODE)
 
-
-pyautogui.FAILSAFE = False
-# if use_resume_generator:    from resume_generator import is_logged_in_GPT, login_GPT, open_resume_chat, create_custom_resume
 
 
 #< Global Variables and logics
@@ -116,6 +93,14 @@ first_name = first_name.strip()
 middle_name = middle_name.strip()
 last_name = last_name.strip()
 full_name = first_name + " " + middle_name + " " + last_name if middle_name else first_name + " " + last_name
+
+# Format location with city and state if available
+if current_city and state:
+    formatted_location = f"{current_city}, {state}"
+elif current_city:
+    formatted_location = current_city
+else:
+    formatted_location = ""
 
 useNewResume = True
 randomly_answered_questions = set()
@@ -303,7 +288,7 @@ def apply_filters() -> None:
 
 
 
-def get_page_info() -> tuple[WebElement | None, int | None]:
+def get_page_info() -> tuple[Optional[WebElement], Optional[int]]:
     '''
     Function to get pagination element and current page number
     '''
@@ -340,10 +325,45 @@ def get_job_main_details(job: WebElement, blacklisted_companies: set, rejected_j
     # work_location = job.find_element(By.CLASS_NAME, "job-card-container__metadata-item").text
     other_details = job.find_element(By.CLASS_NAME, 'artdeco-entity-lockup__subtitle').text
     index = other_details.find(' · ')
-    company = other_details[:index]
-    work_location = other_details[index+3:]
-    work_style = work_location[work_location.rfind('(')+1:work_location.rfind(')')]
-    work_location = work_location[:work_location.rfind('(')].strip()
+    company = other_details[:index] if index != -1 else other_details
+    
+    # Extract work location and work style more robustly
+    location_part = other_details[index+3:] if index != -1 else ""
+    work_location = ""
+    work_style = ""
+    
+    # Try to find work style in parentheses (Remote, On-site, Hybrid)
+    paren_start = location_part.rfind('(')
+    paren_end = location_part.rfind(')')
+    
+    if paren_start != -1 and paren_end != -1 and paren_end > paren_start:
+        work_style = location_part[paren_start+1:paren_end].strip()
+        work_location = location_part[:paren_start].strip()
+    else:
+        # No parentheses found, assume entire string is location
+        work_location = location_part.strip()
+        work_style = "Unknown"
+    
+    # Fallback: Try to get location from metadata items if available
+    if not work_location or work_location == "":
+        try:
+            metadata_items = job.find_elements(By.CLASS_NAME, "job-card-container__metadata-item")
+            if metadata_items:
+                work_location = metadata_items[0].text.strip()
+                # Check if work style is in the metadata
+                for item in metadata_items:
+                    text = item.text.strip()
+                    if text in ["Remote", "On-site", "Hybrid"]:
+                        work_style = text
+                        break
+        except:
+            pass
+    
+    # If still empty, set defaults
+    if not work_location:
+        work_location = "Unknown"
+    if not work_style:
+        work_style = "Unknown"
     
     # Skip if previously rejected due to blacklist or already applied
     skip = False
@@ -366,11 +386,92 @@ def get_job_main_details(job: WebElement, blacklisted_companies: set, rejected_j
         discard_job()
         job_details_button.click() # To pass the error outside
     buffer(click_gap)
+    
+    # After clicking, try to get more accurate location and work style from job details page
+    if not skip:
+        try:
+            # Wait for job details page to load
+            sleep(1.5)
+            # Try to get location from job details page using the tertiary description container
+            try:
+                tertiary_container = driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__tertiary-description-container")
+                # Get the first span with class 'tvm__text tvm__text--low-emphasis' which contains location
+                # The structure is: <span class="tvm__text tvm__text--low-emphasis">Seattle, WA</span>
+                location_spans = tertiary_container.find_elements(By.XPATH, ".//span[contains(@class, 'tvm__text') and contains(@class, 'tvm__text--low-emphasis')]")
+                if location_spans:
+                    # First span usually contains the location (e.g., "Seattle, WA")
+                    location_text = location_spans[0].text.strip()
+                    # Clean up the text (remove any HTML comments or extra whitespace)
+                    location_text = ' '.join(location_text.split())
+                    if location_text and location_text != "" and not location_text.startswith("·"):
+                        # Check if it looks like a location (contains comma or is a city/state format)
+                        if ',' in location_text or (len(location_text.split()) <= 3 and any(char.isalpha() for char in location_text)):
+                            work_location = location_text
+            except Exception as e:
+                # Try alternative method: look for location in the primary description container
+                try:
+                    primary_container = driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__primary-description-container")
+                    # Look for location text in various spans
+                    all_spans = primary_container.find_elements(By.XPATH, ".//span[contains(@class, 'tvm__text')]")
+                    for span in all_spans:
+                        text = span.text.strip()
+                        text = ' '.join(text.split())
+                        # Check if it looks like a location (city, state format)
+                        if text and ',' in text and len(text.split(',')) == 2:
+                            parts = text.split(',')
+                            if len(parts[0].split()) <= 3 and len(parts[1].strip().split()) <= 2:
+                                work_location = text
+                                break
+                except:
+                    pass
+            
+            # Try to get work style from the page
+            if work_style == "Unknown" or work_style == "":
+                try:
+                    # Look for work style in the tertiary container or nearby elements
+                    try:
+                        tertiary_container = driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__tertiary-description-container")
+                        container_text = tertiary_container.text
+                        for style in ["Remote", "On-site", "Hybrid"]:
+                            if style in container_text:
+                                work_style = style
+                                break
+                    except:
+                        pass
+                    
+                    # Also try looking in the primary description area
+                    if work_style == "Unknown" or work_style == "":
+                        try:
+                            primary_container = driver.find_element(By.CLASS_NAME, "job-details-jobs-unified-top-card__primary-description-container")
+                            container_text = primary_container.text
+                            for style in ["Remote", "On-site", "Hybrid"]:
+                                if style in container_text:
+                                    work_style = style
+                                    break
+                        except:
+                            pass
+                    
+                    # Fallback: search the entire job details area
+                    if work_style == "Unknown" or work_style == "":
+                        try:
+                            work_style_elements = driver.find_elements(By.XPATH, "//span[contains(text(), 'Remote') or contains(text(), 'On-site') or contains(text(), 'Hybrid')]")
+                            for elem in work_style_elements:
+                                text = elem.text.strip()
+                                if text in ["Remote", "On-site", "Hybrid"]:
+                                    work_style = text
+                                    break
+                        except:
+                            pass
+                except:
+                    pass
+        except:
+            pass  # If extraction fails, use the values from job card
+    
     return (job_id,title,company,work_location,work_style,skip)
 
 
 # Function to check for Blacklisted words in About Company
-def check_blacklist(rejected_jobs: set, job_id: str, company: str, blacklisted_companies: set) -> tuple[set, set, WebElement] | ValueError:
+def check_blacklist(rejected_jobs: set, job_id: str, company: str, blacklisted_companies: set) -> Union[Tuple[set, set, WebElement], ValueError]:
     jobs_top_card = try_find_by_classes(driver, ["job-details-jobs-unified-top-card__primary-description-container","job-details-jobs-unified-top-card__primary-description","jobs-unified-top-card__primary-description","jobs-details__main-content"])
     about_company_org = find_by_class(driver, "jobs-company__box")
     scroll_to_view(driver, about_company_org)
@@ -407,11 +508,11 @@ def extract_years_of_experience(text: str) -> int:
 
 def get_job_description(
 ) -> tuple[
-    str | Literal['Unknown'],
-    int | Literal['Unknown'],
+    Union[str, Literal['Unknown']],
+    Union[int, Literal['Unknown']],
     bool,
-    str | None,
-    str | None
+    Optional[str],
+    Optional[str]
     ]:
     '''
     # Job Description
@@ -420,20 +521,23 @@ def get_job_description(
     - `jobDescription: str | 'Unknown'`
     - `experience_required: int | 'Unknown'`
     - `skip: bool`
-    - `skipReason: str | None`
-    - `skipMessage: str | None`
+    - `skipReason: Optional[str]`
+    - `skipMessage: Optional[str]`
     '''
+    # Initialize default values
+    jobDescription = "Unknown"
+    experience_required = "Unknown"
+    found_masters = 0
+    skip = False
+    skipReason = None
+    skipMessage = None
+    
     try:
         ##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
-        jobDescription = "Unknown"
-        ##<
-        experience_required = "Unknown"
-        found_masters = 0
         jobDescription = find_by_class(driver, "jobs-box__html-content").text
+        ##<
         jobDescriptionLow = jobDescription.lower()
-        skip = False
-        skipReason = None
-        skipMessage = None
+        
         for word in bad_words:
             if word.lower() in jobDescriptionLow:
                 skipMessage = f'\n{jobDescription}\n\nContains bad word "{word}". Skipping this job!\n'
@@ -454,13 +558,14 @@ def get_job_description(
                 skipReason = "Required experience is high"
                 skip = True
     except Exception as e:
-        if jobDescription == "Unknown":    print_lg("Unable to extract job description!")
+        if jobDescription == "Unknown":
+            print_lg("Unable to extract job description!")
         else:
             experience_required = "Error in extraction"
             print_lg("Unable to extract years of experience required!")
             # print_lg(e)
-    finally:
-        return jobDescription, experience_required, skip, skipReason, skipMessage
+    
+    return jobDescription, experience_required, skip, skipReason, skipMessage
         
 
 
@@ -478,7 +583,7 @@ def answer_common_questions(label: str, answer: str) -> str:
 
 
 # Function to answer the questions for Easy Apply
-def answer_questions(modal: WebElement, questions_list: set, work_location: str, job_description: str | None = None ) -> set:
+def answer_questions(modal: WebElement, questions_list: set, work_location: str, job_description: Optional[str] = None ) -> set:
     # Get all questions from the page
      
     all_questions = modal.find_elements(By.XPATH, ".//div[@data-test-form-element]")
@@ -523,9 +628,11 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                     elif 'state' in label:
                         answer = state
                     elif 'city' in label:
-                        answer = current_city if current_city else work_location
+                        # Use formatted location (city, state) if available, otherwise fall back to work_location
+                        answer = formatted_location if formatted_location else (current_city if current_city else work_location)
                     else:
-                        answer = work_location
+                        # For general location questions, use formatted location
+                        answer = formatted_location if formatted_location else (current_city if current_city else work_location)
                 else: 
                     answer = answer_common_questions(label,answer)
                 try: 
@@ -640,7 +747,8 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 elif 'phone' in label or 'mobile' in label: answer = phone_number
                 elif 'street' in label: answer = street
                 elif 'city' in label or 'location' in label or 'address' in label:
-                    answer = current_city if current_city else work_location
+                    # Use formatted location (city, state) if available, otherwise fall back to work_location
+                    answer = formatted_location if formatted_location else (current_city if current_city else work_location)
                     do_actions = True
                 elif 'signature' in label: answer = full_name # 'signature' in label or 'legal name' in label or 'your name' in label or 'full name' in label: answer = full_name     # What if question is 'name of the city or university you attend, name of referral etc?'
                 elif 'name' in label:
@@ -760,6 +868,173 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
             ##<
             continue
 
+        # Check if it's a range/slider question (for years of experience, etc.)
+        # Try standard HTML range input first
+        range_input = try_xp(Question, ".//input[@type='range']", False)
+        slider_container = None
+        slider_thumb = None
+        
+        # Also check for custom slider components (LinkedIn might use div-based sliders)
+        if not range_input:
+            try:
+                # Look for slider container or track
+                slider_container = Question.find_element(By.XPATH, ".//div[contains(@class, 'slider') or contains(@role, 'slider') or contains(@class, 'range')]")
+                # Try to find the actual input or value element
+                range_input = try_xp(slider_container, ".//input[@type='range']", False)
+                if not range_input:
+                    # Look for hidden input that stores the value
+                    range_input = try_xp(slider_container, ".//input[@type='hidden']", False)
+                # Try to find slider thumb (the draggable part)
+                try:
+                    slider_thumb = slider_container.find_element(By.XPATH, ".//div[contains(@class, 'thumb') or contains(@class, 'handle')]")
+                except:
+                    pass
+            except:
+                pass
+        
+        if range_input or slider_container:
+            label = try_xp(Question, ".//label[@for]", False)
+            try: 
+                label = label.find_element(By.CLASS_NAME,'visually-hidden')
+            except: pass
+            label_org = label.text if label else "Unknown"
+            label = label_org.lower()
+            
+            # Get current value
+            try:
+                prev_answer = range_input.get_attribute("value")
+            except:
+                prev_answer = None
+            
+            # Determine the answer based on the question
+            answer_value = None
+            if 'experience' in label or 'years' in label:
+                # Use years_of_experience from config
+                try:
+                    answer_value = float(years_of_experience) if years_of_experience else 0
+                except:
+                    answer_value = 0
+            elif 'scale' in label or '1-10' in label or 'confidence' in label:
+                # Use confidence_level for scale questions
+                try:
+                    answer_value = float(confidence_level) if confidence_level else 5
+                except:
+                    answer_value = 5
+            else:
+                # Default to middle value if we can't determine
+                try:
+                    min_val = float(range_input.get_attribute("min") or "0")
+                    max_val = float(range_input.get_attribute("max") or "10")
+                    answer_value = (min_val + max_val) / 2
+                except:
+                    answer_value = 5
+            
+            # Set the range value
+            if answer_value is not None and (not prev_answer or overwrite_previous_answers):
+                try:
+                    # Get min and max values
+                    if range_input:
+                        min_val = float(range_input.get_attribute("min") or "0")
+                        max_val = float(range_input.get_attribute("max") or "10")
+                        step = float(range_input.get_attribute("step") or "0.1")
+                    else:
+                        # Default values for custom sliders
+                        min_val = 0.0
+                        max_val = 10.0
+                        step = 0.1
+                    
+                    # Clamp the value to min/max
+                    answer_value = max(min_val, min(max_val, answer_value))
+                    
+                    if range_input:
+                        # Set the value using JavaScript for standard range inputs
+                        driver.execute_script("""
+                            var input = arguments[0];
+                            var value = arguments[1];
+                            input.value = value;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            input.dispatchEvent(new Event('change', { bubbles: true }));
+                            // Also trigger mouse events for custom sliders
+                            input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                            input.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                            input.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                        """, range_input, answer_value)
+                    
+                    # Also try clicking on the slider track if it's a custom component
+                    if slider_container:
+                        try:
+                            scroll_to_view(driver, slider_container)
+                            sleep(0.3)
+                            # Try to find the slider track
+                            slider_track = try_xp(slider_container, ".//div[contains(@class, 'track') or contains(@class, 'rail')]", False)
+                            if not slider_track:
+                                slider_track = slider_container
+                            
+                            if slider_track:
+                                # Calculate position to click based on value
+                                size = slider_track.size
+                                width = size['width']
+                                # Calculate click position (percentage of width)
+                                percentage = (answer_value - min_val) / (max_val - min_val) if max_val > min_val else 1.0
+                                position = width * percentage
+                                # Click on the track at the calculated position
+                                actions.move_to_element_with_offset(slider_track, position - (width / 2), 0).click().perform()
+                                sleep(0.5)
+                                # Also try dragging the thumb if it exists
+                                if slider_thumb:
+                                    actions.click_and_hold(slider_thumb).move_by_offset(int(position - (width / 2)), 0).release().perform()
+                                    sleep(0.3)
+                        except Exception as e:
+                            print_lg(f'Custom slider interaction failed, trying JavaScript: {e}')
+                            # Try JavaScript approach for custom sliders
+                            try:
+                                driver.execute_script("""
+                                    var container = arguments[0];
+                                    var value = arguments[1];
+                                    var min = arguments[2];
+                                    var max = arguments[3];
+                                    // Try to find and set value in custom slider
+                                    var inputs = container.querySelectorAll('input[type="hidden"], input[type="number"]');
+                                    for (var i = 0; i < inputs.length; i++) {
+                                        inputs[i].value = value;
+                                        inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
+                                        inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
+                                    }
+                                    // Trigger any change events on the container
+                                    container.dispatchEvent(new Event('change', { bubbles: true }));
+                                """, slider_container, answer_value, min_val, max_val)
+                            except:
+                                pass
+                    
+                    # Get final value for logging
+                    final_value = None
+                    if range_input:
+                        final_value = range_input.get_attribute("value")
+                    elif slider_container:
+                        try:
+                            hidden_input = slider_container.find_element(By.XPATH, ".//input[@type='hidden' or @type='number']")
+                            final_value = hidden_input.get_attribute("value")
+                        except:
+                            final_value = str(answer_value)
+                    
+                    print_lg(f'Set slider value to {answer_value} (final: {final_value}) for question: {label_org}')
+                except Exception as e:
+                    print_lg(f'Failed to set range input value for "{label_org}": {e}')
+            
+            # Get the final value for the questions list
+            final_value = prev_answer
+            if range_input:
+                final_value = range_input.get_attribute("value") or prev_answer
+            elif slider_container:
+                try:
+                    hidden_input = slider_container.find_element(By.XPATH, ".//input[@type='hidden' or @type='number']")
+                    final_value = hidden_input.get_attribute("value")
+                except:
+                    final_value = prev_answer
+            
+            questions_list.add((label_org, final_value, "range", prev_answer))
+            continue
+
         # Check if it's a checkbox question
         checkbox = try_xp(Question, ".//input[@type='checkbox']", False)
         if checkbox:
@@ -852,7 +1127,6 @@ def failed_job(job_id: str, job_link: str, resume: str, date_listed, error: str,
             file.close()
     except Exception as e:
         print_lg("Failed to update failed jobs list!", e)
-        pyautogui.alert("Failed to update the excel of failed jobs!\nProbably because of 1 of the following reasons:\n1. The file is currently open or in use by another program\n2. Permission denied to write to the file\n3. Failed to find the file", "Failed Logging")
 
 
 def screenshot(driver: WebDriver, job_id: str, failedAt: str) -> str:
@@ -870,10 +1144,10 @@ def screenshot(driver: WebDriver, job_id: str, failedAt: str) -> str:
 
 
 
-def submitted_jobs(job_id: str, title: str, company: str, work_location: str, work_style: str, description: str, experience_required: int | Literal['Unknown', 'Error in extraction'], 
-                   skills: list[str] | Literal['In Development'], hr_name: str | Literal['Unknown'], hr_link: str | Literal['Unknown'], resume: str, 
-                   reposted: bool, date_listed: datetime | Literal['Unknown'], date_applied:  datetime | Literal['Pending'], job_link: str, application_link: str, 
-                   questions_list: set | None, connect_request: Literal['In Development']) -> None:
+def submitted_jobs(job_id: str, title: str, company: str, work_location: str, work_style: str, description: str, experience_required: Union[int, Literal['Unknown', 'Error in extraction']], 
+                   skills: Union[List[str], Literal['In Development']], hr_name: Union[str, Literal['Unknown']], hr_link: Union[str, Literal['Unknown']], resume: str, 
+                   reposted: bool, date_listed: Union[datetime, Literal['Unknown']], date_applied:  Union[datetime, Literal['Pending']], job_link: str, application_link: str, 
+                   questions_list: Optional[set], connect_request: Literal['In Development']) -> None:
     '''
     Function to create or update the Applied jobs CSV file, once the application is submitted successfully
     '''
@@ -890,7 +1164,6 @@ def submitted_jobs(job_id: str, title: str, company: str, work_location: str, wo
         csv_file.close()
     except Exception as e:
         print_lg("Failed to update submitted jobs list!", e)
-        pyautogui.alert("Failed to update the excel of applied jobs!\nProbably because of 1 of the following reasons:\n1. The file is currently open or in use by another program\n2. Permission denied to write to the file\n3. Failed to find the file", "Failed Logging")
 
 
 
@@ -905,7 +1178,7 @@ def discard_job() -> None:
 
 
 # Function to apply to jobs
-def apply_to_jobs(search_terms: list[str]) -> None:
+def apply_to_jobs(search_terms: List[str]) -> None:
     applied_jobs = get_applied_job_ids()
     rejected_jobs = set()
     blacklisted_companies = set()
@@ -914,17 +1187,6 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
     if randomize_search_order:  shuffle(search_terms)
     for searchTerm in search_terms:
-        # Wait for user confirmation before starting new search term
-        confirmation = debug_confirm(
-            f'Ready to search for: "{searchTerm}"\n\nProceed with this search?',
-            "Confirm Search Term",
-            ["Skip", "Proceed"],
-            default_button="Proceed"
-        )
-        if confirmation == "Skip":
-            print_lg(f'Skipping search term "{searchTerm}" as requested by user.')
-            continue
-        
         driver.get(f"https://www.linkedin.com/jobs/search/?keywords={searchTerm}")
         print_lg("\n________________________________________________________________________________________________________________________\n")
         print_lg(f'\n>>>> Now searching for "{searchTerm}" <<<<\n\n')
@@ -945,7 +1207,8 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
             
                 for job in job_listings:
-                    if keep_screen_awake: pyautogui.press('shiftright')
+                    # Screen awake feature removed (was using pyautogui)
+                    # if keep_screen_awake: pyautogui.press('shiftright')
                     if current_count >= switch_number: break
                     print_lg("\n-@-\n")
 
@@ -1093,7 +1356,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     if next_counter >= 15: 
                                         if pause_at_failed_question:
                                             screenshot(driver, job_id, "Needed manual intervention for failed question")
-                                            pyautogui.alert("Couldn't answer one or more questions.\nPlease click \"Continue\" once done.\nDO NOT CLICK Back, Next or Review button in LinkedIn.\n\n\n\n\nYou can turn off \"Pause at failed question\" setting in config.py", "Help Needed", "Continue")
+                                            debug_confirm("Couldn't answer one or more questions.\nPlease click \"Continue\" once done.\nDO NOT CLICK Back, Next or Review button in LinkedIn.\n\n\n\n\nYou can turn off \"Pause at failed question\" setting in config.py", "Help Needed", ["Continue"], default_button="Continue")
                                             next_counter = 1
                                             continue
                                         if questions_list: print_lg("Stuck for one or some of the following questions...", questions_list)
@@ -1106,11 +1369,16 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                         next_button = modal.find_element(By.XPATH, './/span[normalize-space(.)="Review"]')
                                         is_review = True
                                     except NoSuchElementException:  
-                                        next_button = modal.find_element(By.XPATH, './/button[contains(span, "Next")]')
-                                        is_review = False
+                                        try:
+                                            next_button = modal.find_element(By.XPATH, './/button[contains(span, "Next")]')
+                                            is_review = False
+                                        except NoSuchElementException:
+                                            # No Next or Review button found, might already be on review page
+                                            is_review = True
+                                            next_button = None
                                     
                                     # Wait for user confirmation before clicking Next (but not for Review button)
-                                    if not is_review:
+                                    if not is_review and next_button:
                                         confirmation = debug_confirm(
                                             f'Ready to proceed to next step in Easy Apply.\n\nJob: {title} | {company}\nStep: {next_counter}\n\nClick Next?',
                                             "Confirm Next Step",
@@ -1122,16 +1390,47 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                             discard_job()
                                             raise Exception("Job application cancelled by user!")
                                     
-                                    try: next_button.click()
-                                    except ElementClickInterceptedException: break    # Happens when it tries to click Next button in About Company photos section
-                                    buffer(click_gap)
+                                    if next_button:
+                                        try: 
+                                            next_button.click()
+                                            buffer(click_gap)
+                                        except ElementClickInterceptedException: break    # Happens when it tries to click Next button in About Company photos section
+                                    else:
+                                        # Already on review page, break out of loop
+                                        break
 
                             except NoSuchElementException: errored = "nose"
                             finally:
                                 if questions_list and errored != "stuck": 
                                     print_lg("Answered the following questions...", questions_list)
                                     print("\n\n" + "\n".join(str(question) for question in questions_list) + "\n\n")
-                                wait_span_click(driver, "Review", 1, scrollTop=True)
+                                # Try to click Review button if not already on review page
+                                try:
+                                    # Check if we're already on review page by looking for Submit button
+                                    try:
+                                        driver.find_element(By.XPATH, './/span[normalize-space(.)="Submit application"]')
+                                        print_lg("Already on review page")
+                                    except:
+                                        # Not on review page, try to click Review
+                                        review_clicked = False
+                                        try:
+                                            review_button = modal.find_element(By.XPATH, './/span[normalize-space(.)="Review"]')
+                                            scroll_to_view(driver, review_button, True)
+                                            review_button.click()
+                                            buffer(click_gap)
+                                            review_clicked = True
+                                        except:
+                                            try:
+                                                review_button = modal.find_element(By.XPATH, './/button[contains(., "Review")]')
+                                                scroll_to_view(driver, review_button, True)
+                                                review_button.click()
+                                                buffer(click_gap)
+                                                review_clicked = True
+                                            except:
+                                                if not wait_span_click(driver, "Review", 1, scrollTop=True):
+                                                    print_lg("Note: Review button not found, may already be on review page")
+                                except:
+                                    pass  # Modal might not be accessible, continue anyway
                                 cur_pause_before_submit = pause_before_submit
                                 if errored != "stuck" and cur_pause_before_submit:
                                     decision = debug_confirm('1. Please verify your information.\n2. If you edited something, please return to this final screen.\n3. DO NOT CLICK "Submit Application".\n\n\n\n\nYou can turn off "Pause before submit" setting in config.py\nTo TEMPORARILY disable pausing, click "Disable Pause"', "Confirm your information",["Disable Pause", "Discard Application", "Submit Application"], default_button="Submit Application")
@@ -1253,12 +1552,8 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 def run(total_runs: int) -> int:
     if dailyEasyApplyLimitReached:
         return total_runs
-    print_lg("\n########################################################################################################################\n")
-    print_lg(f"Date and Time: {datetime.now()}")
-    print_lg(f"Cycle number: {total_runs}")
-    print_lg(f"Currently looking for jobs posted within '{date_posted}' and sorting them by '{sort_by}'")
+    print_lg(f"\nCycle {total_runs}: Searching for jobs posted within '{date_posted}' (sorted by '{sort_by}')")
     apply_to_jobs(search_terms)
-    print_lg("########################################################################################################################\n")
     if not dailyEasyApplyLimitReached:
         print_lg("Sleeping for 10 min...")
         sleep(300)
@@ -1295,7 +1590,7 @@ def main() -> None:
                 print_lg("="*80 + "\n")
         
         if not os.path.exists(default_resume_path):
-            pyautogui.alert(text='Your default resume "{}" is missing! Please update it\'s folder path "default_resume_path" in config.py\n\nOR\n\nAdd a resume with exact name and path (check for spelling mistakes including cases).\n\n\nFor now the bot will continue using your previous upload from LinkedIn!'.format(default_resume_path), title="Missing Resume", button="OK")
+            print_lg(f'Resume "{default_resume_path}" not found. Using previously uploaded resume from LinkedIn.')
             useNewResume = False
         
         # Login to LinkedIn
@@ -1355,7 +1650,7 @@ def main() -> None:
         print_lg("Browser window closed or session is invalid. Exiting.", e)
     except Exception as e:
         critical_error_log("In Applier Main", e)
-        pyautogui.alert(e,alert_title)
+        print_lg(f"Error: {e}")
     finally:
         print_lg("\n\nTotal runs:                     {}".format(total_runs))
         print_lg("Jobs Easy Applied:              {}".format(easy_applied_count))
@@ -1380,12 +1675,7 @@ def main() -> None:
             "The only limit to our realization of tomorrow will be our doubts of today. - Franklin D. Roosevelt"
             ])
         msg = f"\n{quote}\n\n\nBest regards,\nSai Vignesh Golla\nhttps://www.linkedin.com/in/saivigneshgolla/\n\n"
-        pyautogui.alert(msg, "Exiting..")
         print_lg(msg,"Closing the browser...")
-        if tabs_count >= 10:
-            msg = "NOTE: IF YOU HAVE MORE THAN 10 TABS OPENED, PLEASE CLOSE OR BOOKMARK THEM!\n\nOr it's highly likely that application will just open browser and not do anything next time!" 
-            pyautogui.alert(msg,"Info")
-            print_lg("\n"+msg)
         ##> ------ Yang Li : MARKYangL - Feature ------
         if use_AI and aiClient:
             try:

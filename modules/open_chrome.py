@@ -20,7 +20,6 @@ if stealth_mode:
 else: 
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
-    # from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from modules.helpers import find_default_profile_directory, critical_error_log, print_lg
@@ -33,20 +32,13 @@ try:
     if run_in_background:   options.add_argument("--headless")
     if disable_extensions:  options.add_argument("--disable-extensions")
 
-    print_lg("IF YOU HAVE MORE THAN 10 TABS OPENED, PLEASE CLOSE OR BOOKMARK THEM! Or it's highly likely that application will just open browser and not do anything!")
     if safe_mode: 
-        print_lg("SAFE MODE: Will login with a guest profile, browsing history will not be saved in the browser!")
+        pass  # Safe mode enabled
     else:
         profile_dir = find_default_profile_directory()
         if profile_dir: options.add_argument(f"--user-data-dir={profile_dir}")
-        else: print_lg("Default profile directory not found. Logging in with a guest profile, Web history will not be saved!")
     if stealth_mode:
-        # try: 
-        #     driver = uc.Chrome(driver_executable_path="C:\\Program Files\\Google\\Chrome\\chromedriver-win64\\chromedriver.exe", options=options)
-        # except (FileNotFoundError, PermissionError) as e: 
-        #     print_lg("(Undetected Mode) Got '{}' when using pre-installed ChromeDriver.".format(type(e).__name__)) 
-            print_lg("Downloading Chrome Driver... This may take some time. Undetected mode requires download every run!")
-            driver = uc.Chrome(options=options)
+        driver = uc.Chrome(options=options)
     else: 
         # Try to use chromium-browser if available (for Linux/WSL)
         import shutil
@@ -63,8 +55,7 @@ except Exception as e:
     if isinstance(e,TimeoutError): msg = "Couldn't download Chrome-driver. Set stealth_mode = False in config!"
     print_lg(msg)
     critical_error_log("In Opening Chrome", e)
-    from pyautogui import alert
-    alert(msg, "Error in opening chrome")
+    print_lg(f"Error in opening chrome: {msg}")
     try: driver.quit()
     except NameError: exit()
     

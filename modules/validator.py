@@ -16,25 +16,26 @@ version:    24.12.29.12.30
 
 
 # from config.XdepricatedX import *
+from typing import Optional, Union
 
 __validation_file_path = ""
 
-def check_int(var: int, var_name: str, min_value: int=0) -> bool | TypeError | ValueError:
+def check_int(var: int, var_name: str, min_value: int=0) -> Union[bool, TypeError, ValueError]:
     if not isinstance(var, int): raise TypeError(f'The variable "{var_name}" in "{__validation_file_path}" must be an Integer!\nReceived "{var}" of type "{type(var)}" instead!\n\nSolution:\nPlease open "{__validation_file_path}" and update "{var_name}" to be an Integer.\nExample: `{var_name} = 10`\n\nNOTE: Do NOT surround Integer values in quotes ("10")X !\n\n')
     if var < min_value: raise ValueError(f'The variable "{var_name}" in "{__validation_file_path}" expects an Integer greater than or equal to `{min_value}`! Received `{var}` instead!\n\nSolution:\nPlease open "{__validation_file_path}" and update "{var_name}" accordingly.')
     return True
 
-def check_boolean(var: bool, var_name: str) -> bool | ValueError:
+def check_boolean(var: bool, var_name: str) -> Union[bool, ValueError]:
     if var == True or var == False: return True
     raise ValueError(f'The variable "{var_name}" in "{__validation_file_path}" expects a Boolean input `True` or `False`, not "{var}" of type "{type(var)}" instead!\n\nSolution:\nPlease open "{__validation_file_path}" and update "{var_name}" to either `True` or `False` (case-sensitive, T and F must be CAPITAL/uppercase).\nExample: `{var_name} = True`\n\nNOTE: Do NOT surround Boolean values in quotes ("True")X !\n\n')
 
-def check_string(var: str, var_name: str, options: list=[], min_length: int=0) -> bool | TypeError | ValueError:
+def check_string(var: str, var_name: str, options: list=[], min_length: int=0) -> Union[bool, TypeError, ValueError]:
     if not isinstance(var, str): raise TypeError(f'Invalid input for {var_name}. Expecting a String!')
     if min_length > 0 and len(var) < min_length: raise ValueError(f'Invalid input for {var_name}. Expecting a String of length at least {min_length}!')
     if len(options) > 0 and var not in options: raise ValueError(f'Invalid input for {var_name}. Expecting a value from {options}, not {var}!')
     return True
 
-def check_list(var: list, var_name: str, options: list=[], min_length: int=0) -> bool | TypeError | ValueError:
+def check_list(var: list, var_name: str, options: list=[], min_length: int=0) -> Union[bool, TypeError, ValueError]:
     if not isinstance(var, list): 
         raise TypeError(f'Invalid input for {var_name}. Expecting a List!')
     if len(var) < min_length: raise ValueError(f'Invalid input for {var_name}. Expecting a List of length at least {min_length}!')
@@ -46,7 +47,7 @@ def check_list(var: list, var_name: str, options: list=[], min_length: int=0) ->
 
 
 from config.personals import *
-def validate_personals() -> None | ValueError | TypeError:
+def validate_personals() -> Union[None, ValueError, TypeError]:
     '''
     Validates all variables in the `/config/personals.py` file.
     '''
@@ -74,7 +75,7 @@ def validate_personals() -> None | ValueError | TypeError:
 
 
 from config.questions import *
-def validate_questions() -> None | ValueError | TypeError:
+def validate_questions() -> Union[None, ValueError, TypeError]:
     '''
     Validates all variables in the `/config/questions.py` file.
     '''
@@ -102,7 +103,7 @@ def validate_questions() -> None | ValueError | TypeError:
 
 
 from config.search import *
-def validate_search() -> None | ValueError | TypeError:
+def validate_search() -> Union[None, ValueError, TypeError]:
     '''
     Validates all variables in the `/config/search.py` file.
     '''
@@ -151,7 +152,7 @@ def validate_search() -> None | ValueError | TypeError:
 from config.secrets import *
 import os
 
-def check_llm_env_vars() -> dict | None:
+def check_llm_env_vars() -> Optional[dict]:
     '''
     Checks if required LLM environment variables are set when use_AI is True.
     Returns a dict with status information, or None if AI is disabled.
@@ -217,7 +218,7 @@ def check_llm_env_vars() -> dict | None:
         "stream_output": env_vars.get("STREAM_OUTPUT", "False").lower() == "true",
     }
 
-def validate_secrets() -> None | ValueError | TypeError:
+def validate_secrets() -> Union[None, ValueError, TypeError]:
     '''
     Validates all variables in the `/config/secrets.py` file.
     Also checks environment variables for LLM tool usage.
@@ -259,7 +260,7 @@ def validate_secrets() -> None | ValueError | TypeError:
 
 
 from config.settings import *
-def validate_settings() -> None | ValueError | TypeError:
+def validate_settings() -> Union[None, ValueError, TypeError]:
     '''
     Validates all variables in the `/config/settings.py` file.
     '''
@@ -294,7 +295,7 @@ def validate_settings() -> None | ValueError | TypeError:
 
 
 
-def validate_config() -> bool | ValueError | TypeError:
+def validate_config() -> Union[bool, ValueError, TypeError]:
     '''
     Runs all validation functions to validate all variables in the config files.
     '''

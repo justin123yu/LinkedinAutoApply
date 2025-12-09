@@ -1,16 +1,14 @@
 ##> ------ Yang Li : MARKYangL - Feature ------
 from config.secrets import *
 from config.settings import showAiErrorAlerts
-from modules.helpers import print_lg, critical_error_log, convert_to_json
+from modules.helpers import print_lg, critical_error_log, convert_to_json, cross_platform_confirm
 from modules.ai.prompts import *
-
-from pyautogui import confirm
 from openai import OpenAI
 from openai.types.model import Model
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
-from typing import Iterator, Literal
+from typing import Iterator, Literal, Optional, Union, List
 
-def deepseek_create_client() -> OpenAI | None:
+def deepseek_create_client() -> Optional[OpenAI]:
     '''
     Creates a DeepSeek client using the OpenAI compatible API.
     * Returns an OpenAI-compatible client configured for DeepSeek
@@ -41,7 +39,7 @@ def deepseek_create_client() -> OpenAI | None:
         error_message = f"Error occurred while creating DeepSeek client. Make sure your API connection details are correct."
         critical_error_log(error_message, e)
         if showAiErrorAlerts:
-            if "Pause AI error alerts" == confirm(f"{error_message}\n{str(e)}", "DeepSeek Connection Error", ["Pause AI error alerts", "Okay Continue"]):
+            if "Pause AI error alerts" == cross_platform_confirm(f"{error_message}\n{str(e)}", "DeepSeek Connection Error", ["Pause AI error alerts", "Okay Continue"]):
                 showAiErrorAlerts = False
         return None
 
@@ -55,7 +53,7 @@ def deepseek_model_supports_temperature(model_name: str) -> bool:
     deepseek_models = ["deepseek-chat", "deepseek-reasoner"]
     return model_name in deepseek_models
 
-def deepseek_completion(client: OpenAI, messages: list[dict], response_format: dict = None, temperature: float = 0, stream: bool = stream_output) -> dict | ValueError:
+def deepseek_completion(client: OpenAI, messages: List[dict], response_format: Optional[dict] = None, temperature: float = 0, stream: bool = stream_output) -> Union[dict, ValueError]:
     '''
     Completes a chat using DeepSeek API and formats the results.
     * Takes in `client` of type `OpenAI` - The DeepSeek client
@@ -141,7 +139,7 @@ def deepseek_completion(client: OpenAI, messages: list[dict], response_format: d
             
         raise ValueError(error_message)
 
-def deepseek_extract_skills(client: OpenAI, job_description: str, stream: bool = stream_output) -> dict | ValueError:
+def deepseek_extract_skills(client: OpenAI, job_description: str, stream: bool = stream_output) -> Union[dict, ValueError]:
     '''
     Function to extract skills from job description using DeepSeek API.
     * Takes in `client` of type `OpenAI` - The DeepSeek client
@@ -178,11 +176,11 @@ def deepseek_extract_skills(client: OpenAI, job_description: str, stream: bool =
 
 def deepseek_answer_question(
     client: OpenAI, 
-    question: str, options: list[str] | None = None, 
+    question: str, options: Optional[List[str]] = None, 
     question_type: Literal['text', 'textarea', 'single_select', 'multiple_select'] = 'text', 
     job_description: str = None, about_company: str = None, user_information_all: str = None,
     stream: bool = stream_output
-) -> dict | ValueError:
+) -> Union[dict, ValueError]:
     '''
     Function to answer a question using DeepSeek AI.
     * Takes in `client` of type `OpenAI` - The DeepSeek client

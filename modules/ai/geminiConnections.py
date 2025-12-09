@@ -1,10 +1,9 @@
 import google.generativeai as genai
 from config.secrets import llm_model, llm_api_key
 from config.settings import showAiErrorAlerts
-from modules.helpers import print_lg, critical_error_log, convert_to_json
+from modules.helpers import print_lg, critical_error_log, convert_to_json, cross_platform_confirm
 from modules.ai.prompts import *
-from pyautogui import confirm
-from typing import Literal
+from typing import Literal, Optional, Union, List
 
 def gemini_get_models_list():
     """
@@ -51,11 +50,11 @@ def gemini_create_client():
         error_message = f"Error occurred while configuring Gemini client. Make sure your API key and model name are correct."
         critical_error_log(error_message, e)
         if showAiErrorAlerts:
-            if "Pause AI error alerts" == confirm(f"{error_message}\n{str(e)}", "Gemini Connection Error", ["Pause AI error alerts", "Okay Continue"]):
+            if "Pause AI error alerts" == cross_platform_confirm(f"{error_message}\n{str(e)}", "Gemini Connection Error", ["Pause AI error alerts", "Okay Continue"]):
                 showAiErrorAlerts = False
         return None
 
-def gemini_completion(model, prompt: str, is_json: bool = False) -> dict | str:
+def gemini_completion(model, prompt: str, is_json: bool = False) -> Union[dict, str]:
     """
     Generates content using the Gemini model.
     * Takes in `model` - The Gemini model object.
@@ -112,7 +111,7 @@ def gemini_completion(model, prompt: str, is_json: bool = False) -> dict | str:
         critical_error_log(f"Error occurred while getting Gemini completion!", e)
         return {"error": str(e)}
 
-def gemini_extract_skills(model, job_description: str) -> list[str] | None:
+def gemini_extract_skills(model, job_description: str) -> Optional[List[str]]:
     """
     Extracts skills from a job description using the Gemini model.
     * Takes in `model` - The Gemini model object.
@@ -129,7 +128,7 @@ def gemini_extract_skills(model, job_description: str) -> list[str] | None:
 
 def gemini_answer_question(
     model,
-    question: str, options: list[str] | None = None, 
+    question: str, options: Optional[List[str]] = None, 
     question_type: Literal['text', 'textarea', 'single_select', 'multiple_select'] = 'text', 
     job_description: str = None, about_company: str = None, user_information_all: str = None
 ) -> str:
